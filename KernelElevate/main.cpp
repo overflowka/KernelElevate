@@ -1,6 +1,4 @@
 #include <ntifs.h>
-#include <ntdef.h>
-#include <minwindef.h>
 #include "skCrypt.h"
 #pragma warning(disable: 6328 6273) // disable DbgPrintEx warnings
 
@@ -10,15 +8,6 @@ constexpr ULONG requestElevate = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x777, METHOD_BUF
 extern "C" {
     char* PsGetProcessImageFileName(PEPROCESS Process);
     NTKERNELAPI NTSTATUS IoCreateDriver(PUNICODE_STRING DriverName, PDRIVER_INITIALIZE InitializationFunction);
-    NTKERNELAPI NTSTATUS MmCopyVirtualMemory(
-        PEPROCESS SourceProcess,
-        PVOID SourceAddress,
-        PEPROCESS TargetProcess,
-        PVOID TargetAddress, SIZE_T
-        BufferSize,
-        KPROCESSOR_MODE PreviousMode,
-        PSIZE_T ReturnSize
-    );
 }
 
 bool elevateRights(int PID) {
