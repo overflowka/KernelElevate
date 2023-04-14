@@ -128,14 +128,6 @@ NTSTATUS IoControl(PDEVICE_OBJECT devObj, PIRP irp) {
     return STATUS_SUCCESS;
 }
 
-NTSTATUS IoUnsupported(PDEVICE_OBJECT devObj, PIRP irp) {
-    UNREFERENCED_PARAMETER(devObj);
-
-    irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
-    IoCompleteRequest(irp, IO_NO_INCREMENT);
-    return irp->IoStatus.Status;
-}
-
 NTSTATUS IoCreateClose(PDEVICE_OBJECT devObj, PIRP irp) {
     UNREFERENCED_PARAMETER(devObj);
 
@@ -167,10 +159,6 @@ NTSTATUS RealEntry(PDRIVER_OBJECT driverObj, PUNICODE_STRING registeryPath) {
     }
 
     SetFlag(devObj->Flags, DO_BUFFERED_IO);
-
-    for (int i = 0; i < IRP_MJ_MAXIMUM_FUNCTION; i++) {
-        driverObj->MajorFunction[i] = IoUnsupported;
-    }
 
     driverObj->MajorFunction[IRP_MJ_CREATE] = IoCreateClose;
     driverObj->MajorFunction[IRP_MJ_CLOSE] = IoCreateClose;
